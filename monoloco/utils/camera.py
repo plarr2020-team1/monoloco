@@ -1,4 +1,5 @@
 
+import math
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -180,3 +181,14 @@ def open_image(path_image):
     with open(path_image, 'rb') as f:
         pil_image = Image.open(f).convert('RGB')
         return pil_image
+
+
+def correct_angle(yaw, xyz):
+    correction = math.atan2(xyz[0], xyz[2])
+    yaw = yaw - correction
+    if yaw > np.pi:
+        yaw -= 2 * np.pi
+    elif yaw < -np.pi:
+        yaw += 2 * np.pi
+    assert -2 * np.pi <= yaw <= 2 * np.pi
+    return math.sin(yaw), math.cos(yaw)

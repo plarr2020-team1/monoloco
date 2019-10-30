@@ -203,18 +203,6 @@ def quaternion_yaw(q: Quaternion, in_image_frame: bool = True) -> float:
     return float(yaw)
 
 
-def correct_angle(yaw, box_obj):
-
-    correction = math.atan2(box_obj.center[0], box_obj.center[2])
-    yaw = yaw - correction
-    if yaw > np.pi:
-        yaw -= 2 * np.pi
-    elif yaw < -np.pi:
-        yaw += 2 * np.pi
-    assert -2 * np.pi <= yaw <= 2 * np.pi
-    return math.sin(yaw), math.cos(yaw)
-
-
 def extract_box_average(boxes_3d):
     boxes_np = np.array(boxes_3d)
     means = np.mean(boxes_np[:, 3:], axis=0)
