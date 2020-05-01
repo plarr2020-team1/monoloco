@@ -57,7 +57,7 @@ class Trainer:
             warnings.warn("Warning: default logs directory not found")
         assert os.path.exists(joints), "Input file not found"
 
-        self.joints = joints
+        self.joints = jointsqq
         self.num_epochs = epochs
         self.save = save
         self.print_loss = print_loss
@@ -159,7 +159,6 @@ class Trainer:
                         loss.backward()
                         self.optimizer.step()
                     self.epoch_logs(phase, loss, loss_values, inputs, running_loss, epoch_losses)
-
 
             self.cout_values(epoch, epoch_losses, running_loss)
 

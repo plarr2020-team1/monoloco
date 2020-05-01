@@ -5,7 +5,7 @@ import numpy as np
 import torch
 import torchvision
 
-from ..utils import get_keypoints, pixel_to_camera
+from ..utils import get_keypoints, pixel_to_camera, back_correct_angles
 
 
 def preprocess_monoloco(keypoints, kk):
@@ -95,7 +95,7 @@ def unnormalize_bi(loc):
     return bi
 
 
-def preprocess_pifpaf(annotations, im_size=None):
+def preprocess_pifpaf(annotations, im_size=None, enlarge_boxes=True):
     """
     Preprocess pif annotations:
     1. enlarge the box of 10%
@@ -104,19 +104,31 @@ def preprocess_pifpaf(annotations, im_size=None):
 
     boxes = []
     keypoints = []
-
+    dummy = 1 if enlarge_boxes else 2.3  # TODO fix for social
     for dic in annotations:
-        box = dic['bbox']
-        if box[3] < 0.5:  # Check for no detections (boxes 0,0,0,0)
-            return [], []
-
         kps = prepare_pif_kps(dic['keypoints'])
-        conf = float(np.sort(np.array(kps[2]))[-3])  # The confidence is the 3rd highest value for the keypoints
+        box = dic['bbox']
+        try:
+            conf = dic['score']
+            # Enlarge boxes
+            delta_h = (box[3]) / (10 * dummy)
+            delta_w = (box[2]) / (5 * dummy)
+            # from width height to corners
+            box[2] += box[0]
+            box[3] += box[1]
 
-        # Add 15% for y and 20% for x
-        delta_h = (box[3] - box[1]) / 7
-        delta_w = (box[2] - box[0]) / 3.5
-        assert delta_h > -5 and delta_w > -5, "Bounding box <=0"
+        except KeyError:
+            all_confs = np.array(kps[2])
+            score_weights = np.ones(17)
+            score_weights[:3] = 3.0
+            score_weights[5:] = 0.1
+            conf = np.sum(score_weights * np.sort(all_confs)[::-1])
+            conf = float(np.mean(all_confs))
+            # Add 15% for y and 20% for x
+            delta_h = (box[3] - box[1]) / (7 * dummy)
+            delta_w = (box[2] - box[0]) / (3.5 * dummy)
+            assert delta_h > -5 and delta_w > -5, "Bounding box <=0"
+
         box[0] -= delta_w
         box[1] -= delta_h
         box[2] += delta_w
@@ -157,19 +169,40 @@ def image_transform(image):
     return transforms(image)
 
 
-def extract_outputs(outputs, tasks=None):
+def extract_outputs_mono(outputs, tasks=None, mono=False):
+    """
+    Extract the outputs for multi-task training and predictions
+    Inputs:
+        tensor (m, 10) or (m,9) if monoloco
+    Outputs:
+         - if tasks are provided return ordered list of raw tensors
+         - else return a dictionary with processed outputs
+    """
+    dic_out = {'xy': outputs[:, 0:2], 'z': outputs[:, 2:4], 'hwl': outputs[:, 4:7], 'ori': outputs[:, 7:9]}
 
-    dd = torch.norm(outputs[:, 0:3], p=2, dim=1).view(-1, 1)
-    bi = unnormalize_bi(outputs[:, 2:4])
-
-    dic_out = {'xy': outputs[:, 0:2], 'loc': outputs[:, 2:4], 'wlh': outputs[:, 4:7], 'ori': outputs[:, 7:],
-               'dd': dd, 'bi': bi}
-
-    if tasks is None:
-        return dic_out
-    else:
+    # Multi-task training
+    if tasks is not None:
         assert isinstance(tasks, tuple), "tasks need to be a tuple"
         return [dic_out[task] for task in tasks]
+
+    # Preprocess the tensor
+    else:
+        AV_W, AV_L, AV_H, WLH_STD = 0.68, 0.75, 1.72, 0.1
+        bi = unnormalize_bi(dic_out['z'])
+
+        dic_out = {key: el.detach().cpu() for key, el in dic_out.items()}
+        dic_out['xyz'] = torch.cat((dic_out['xy'], dic_out['z'][:, 0:1]), dim=1)
+        dd = torch.norm(dic_out['xyz'], p=2, dim=1).view(-1, 1)
+
+        dic_out.pop('z'), dic_out.pop('xy')
+        dic_out['d'], dic_out['bi'] = dd, bi
+
+        yaw_pred = torch.atan2(dic_out['ori'][:, 0:1], dic_out['ori'][:, 1:2])
+        yaw_orig = back_correct_angles(yaw_pred, dic_out['xyz'])
+
+        # dic_out['wlh'] = dic_out['wlh'] * WLH_STD + torch.tensor([AV_W, AV_L, AV_H]).view(1, -1)
+        dic_out['yaw'] = (yaw_pred, yaw_orig)  # alpha, ry
+        return dic_out
 
 
 def extract_labels(labels, tasks=None):

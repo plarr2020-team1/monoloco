@@ -34,22 +34,26 @@ def get_iou_matrix(boxes, boxes_gt):
     return iou_matrix
 
 
-def get_iou_matches(boxes, boxes_gt, thresh):
-    """From 2 sets of boxes and a minimum threshold, compute the matching indices for IoU matchings"""
-
-    iou_matrix = get_iou_matrix(boxes, boxes_gt)
-    if not iou_matrix.size:
-        return []
+def get_iou_matches(boxes, boxes_gt, iou_min=0.3):
+    """From 2 sets of boxes and a minimum threshold, compute the matching indices for IoU matches"""
 
     matches = []
-    iou_max = np.max(iou_matrix)
-    while iou_max > thresh:
-        # Extract the indeces of the max
-        args_max = np.unravel_index(np.argmax(iou_matrix, axis=None), iou_matrix.shape)
-        matches.append(args_max)
-        iou_matrix[args_max[0], :] = 0
-        iou_matrix[:, args_max[1]] = 0
-        iou_max = np.max(iou_matrix)
+    used = []
+    if len(boxes) == 0 or len(boxes_gt) == 0:
+        return []
+    confs = [box[4] for box in boxes]
+
+    indices = list(np.argsort(confs))
+    for idx in indices[::-1]:
+        box = boxes[idx]
+        ious = []
+        for idx_gt, box_gt in enumerate(boxes_gt):
+            iou = calculate_iou(box, box_gt)
+            ious.append(iou)
+        idx_gt_max = int(np.argmax(ious))
+        if (ious[idx_gt_max] >= iou_min) and (idx_gt_max not in used):
+            matches.append((idx, idx_gt_max))
+            used.append(idx_gt_max)
     return matches
 
 

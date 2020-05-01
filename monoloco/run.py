@@ -51,6 +51,8 @@ def cli():
     predict_parser.add_argument('--n_dropout', type=int, help='Epistemic uncertainty evaluation', default=0)
     predict_parser.add_argument('--dropout', type=float, help='dropout parameter', default=0.2)
     predict_parser.add_argument('--webcam', help='monoloco streaming', action='store_true')
+    predict_parser.add_argument('--social', help='activate social distancing', action='store_true')
+    predict_parser.add_argument('--json_dir', help='json directory for social')
 
     # Training
     training_parser.add_argument('--joints', help='Json file with input joints',
@@ -96,8 +98,12 @@ def main():
             from .visuals.webcam import webcam
             webcam(args)
         else:
-            from . import predict
-            predict.predict(args)
+            if args.social:
+                from . import predict_social
+                predict_social.predict(args)
+            else:
+                from . import predict
+                predict.predict(args)
 
     elif args.command == 'prep':
         if 'nuscenes' in args.dataset:
