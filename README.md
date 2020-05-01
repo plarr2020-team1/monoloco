@@ -5,7 +5,7 @@ and the [Project Page](https://www.epfl.ch/labs/vita/research/perception/monoloc
 
 Body Poses are obtained from Pifpaf pose detector: [openpifpaf](https://github.com/vita-epfl/openpifpaf).
 
-This work is also built on preliminary studies on orientation from [Jean Marc Bejjiani](https://github.com/Parrotlife/orient-dim-pos-estimation).
+This work is also built on preliminary studies on orientation from [this repository](https://github.com/Parrotlife/orient-dim-pos-estimation).
 
 <img src="docs/social_distance.png" height="400">
 
@@ -26,13 +26,16 @@ For training, evaluation or webcam usage we suggest the [master branch](https://
 ### Install
 Python 3 is required. Python 2 is not supported.
 
-Clone the repository and install the following packages.
+Clone this branch of the repository with:
+
+`git clone -b social-distance --single-branch git@github.com:vita-epfl/monoloco.git`
+
+and install the following packages.
 
 ```
-pip3 install torch<=1.1.0
-pip3 install Pillow<=6.3
-pip3 install torchvision<=0.3.0
-pip3 install openpifpaf<=0.9.0
+pip3 install torch==1.1.0
+pip3 install torchvision==0.3.0
+pip3 install openpifpaf==0.9.0
 ```
 
 ### Inference
@@ -58,6 +61,9 @@ To load the corresponding json file of Pifpaf (instead of running the pose detec
 `--json_dir <directory of json files>`
 
 The program automatically looks for a json file with the name of the image.
+
+Json files can be created and saved with pifpaf. For example:
+`python -m monoloco.run predict --glob "data/images/000.png" --networks pifpaf --output_types json  --model data/models/monoloco-191018-1459.pkl  -o data/output/ --instance-threshold 0.4`
 
 For more options check
 `python3 -m monoloco.run predict --help` or the master branch.

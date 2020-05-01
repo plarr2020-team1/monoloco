@@ -26,53 +26,88 @@ def predict(args):
 
     # Load data and model
     monoloco = MonoLoco(model=args.model, device=args.device)
-
     images = []
     images += glob.glob(args.glob)  # from cli as a string or linux converts
 
-    path_json_t = args.json_dir
-    # with open(path_json_t) as f:
-    #     data = ndjson.load(f)
-    # assert len(data) == len(images), "different number of tracker annotations and images"
-    for idx, im_path in enumerate(images):
-        # Load image
-        with open(im_path, 'rb') as f:
-            image = Image.open(f).convert('RGB')
-        if args.output_directory is None:
-            output_path = im_path
-        else:
-            file_name = os.path.basename(im_path)
-            output_path = os.path.join(args.output_directory, file_name)
+    # Option 1: Run PifPaf extract poses and run MonoLoco in a single forward pass
+    if args.json_dir is None:
+        from .network import PifPaf, ImageList
+        pifpaf = PifPaf(args)
+        data = ImageList(args.images, scale=args.scale)
+        data_loader = torch.utils.data.DataLoader(
+            data, batch_size=1, shuffle=False,
+            pin_memory=args.pin_memory, num_workers=args.loader_workers)
 
-        im_size = (float(image.size[0] / args.scale),
-                   float(image.size[1] / args.scale))  # Width, Height (original)
-        kk, dic_gt = factory_for_gt(im_size, name=im_path, path_gt=args.path_gt)
-        image_t = torchvision.transforms.functional.to_tensor(image).permute(1, 2, 0)
+        for idx, (image_paths, image_tensors, processed_images_cpu) in enumerate(data_loader):
+            images = image_tensors.permute(0, 2, 3, 1)
 
-        # Load json
-        basename = os.path.splitext(os.path.basename(im_path))[0]
-        extension = '.png.pifpaf.json'
-        path_json = os.path.join(args.json_dir, basename + extension)
-        # path_json = 'data/figures/mot-06/output/000001.png.pifpaf.json'
-        annotations = open_annotations(path_json)
-        # if len(annotations) > 2:
-        #     print(path_json)
-        #     print()
-        #     print()
+            processed_images = processed_images_cpu.to(args.device, non_blocking=True)
+            fields_batch = pifpaf.fields(processed_images)
 
-        # annotations_t = data[idx]['predictions']
+            # unbatch
+            for image_path, image, processed_image_cpu, fields in zip(
+                    image_paths, images, processed_images_cpu, fields_batch):
 
-        # Run Monoloco
-        boxes, keypoints = preprocess_pifpaf(annotations, im_size, enlarge_boxes=False)
-        # boxes_t, keypoints_t = preprocess_pifpaf(annotations_t, im_size, enlarge_boxes=False)
-        dic_out = monoloco.forward(keypoints, kk)
-        dic_out = monoloco.post_process(dic_out, boxes, keypoints, kk, dic_gt, reorder=False)
+                if args.output_directory is None:
+                    output_path = image_path
+                else:
+                    file_name = os.path.basename(image_path)
+                    output_path = os.path.join(args.output_directory, file_name)
+                im_size = (float(image.size()[0] / args.scale),
+                           float(image.size()[1] / args.scale))
 
-        # Print
-        show_social(args, image_t, output_path, annotations, dic_out)
+                print('image', idx, image_path, output_path)
 
-        print('Image {}\n'.format(cnt) + '-' * 120)
-        cnt += 1
+                _, _, pifpaf_out = pifpaf.forward(image, processed_image_cpu, fields)
+
+                kk, dic_gt = factory_for_gt(im_size, name=image_path, path_gt=args.path_gt)
+                image_t = image
+
+                # Run Monoloco
+                boxes, keypoints = preprocess_pifpaf(pifpaf_out, im_size, enlarge_boxes=False)
+                dic_out = monoloco.forward(keypoints, kk)
+                dic_out = monoloco.post_process(dic_out, boxes, keypoints, kk, dic_gt, reorder=False)
+
+                # Print
+                show_social(args, image_t, output_path, pifpaf_out, dic_out)
+
+                print('Image {}\n'.format(cnt) + '-' * 120)
+                cnt += 1
+
+    # Option 2: Load json file of poses from PifPaf and run monoloco
+    else:
+        for idx, im_path in enumerate(images):
+
+            # Load image
+            with open(im_path, 'rb') as f:
+                image = Image.open(f).convert('RGB')
+            if args.output_directory is None:
+                output_path = im_path
+            else:
+                file_name = os.path.basename(im_path)
+                output_path = os.path.join(args.output_directory, file_name)
+
+            im_size = (float(image.size[0] / args.scale),
+                       float(image.size[1] / args.scale))  # Width, Height (original)
+            kk, dic_gt = factory_for_gt(im_size, name=im_path, path_gt=args.path_gt)
+            image_t = torchvision.transforms.functional.to_tensor(image).permute(1, 2, 0)
+
+            # Load json
+            basename = os.path.splitext(os.path.basename(im_path))[0]
+            extension = '.png.pifpaf.json'
+            path_json = os.path.join(args.json_dir, basename + extension)
+            annotations = open_annotations(path_json)
+
+            # Run Monoloco
+            boxes, keypoints = preprocess_pifpaf(annotations, im_size, enlarge_boxes=False)
+            dic_out = monoloco.forward(keypoints, kk)
+            dic_out = monoloco.post_process(dic_out, boxes, keypoints, kk, dic_gt, reorder=False)
+
+            # Print
+            show_social(args, image_t, output_path, annotations, dic_out)
+
+            print('Image {}\n'.format(cnt) + '-' * 120)
+            cnt += 1
 
 
 def show_social(args, image_t, output_path, annotations, dic_out):
@@ -82,7 +117,6 @@ def show_social(args, image_t, output_path, annotations, dic_out):
 
     angles = dic_out['angles']
     xz_centers = [[xx[0], xx[2]] for xx in dic_out['xyz_pred']]
-    # test_social()
 
     colors = ['r' if social_distance(xz_centers, angles, idx) else 'deepskyblue'
               for idx, _ in enumerate(dic_out['xyz_pred'])]
@@ -123,10 +157,6 @@ def draw_orientation(ax, centers, sizes, angles, colors, mode):
         head_width = 0.3
         linewidth = 2
         radiuses = [0.2] * len(centers)
-        # length = 1.6
-        # head_width = 0.4
-        # linewidth = 2.7
-        radiuses = [0.3] * len(centers)
         fill = True
         alpha = 1
         zorder_circle = 2
@@ -193,6 +223,7 @@ def calculate_margin(distance):
     """TOOD: Be permissive in orientation for far people and less for very close ones"""
     margin = distance * 2 / 5
     return margin
+
 
 def get_pifpaf_outputs(annotations):
     """Extract keypoints sets and scores from output dictionary"""
