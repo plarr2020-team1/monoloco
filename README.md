@@ -7,6 +7,8 @@ Body Poses are obtained from Pifpaf pose detector: [openpifpaf](https://github.c
 
 This work is also built on preliminary studies on orientation from [Jean Marc Bejjiani](https://github.com/Parrotlife/orient-dim-pos-estimation).
 
+<img src="docs/social_distance.png" height="400">
+
 Some details of the algorithm:
 
 * No real images are captured, nor stored nor shown
@@ -15,7 +17,6 @@ Some details of the algorithm:
 * Analyzes not only the distance of people but also social interactions, such as their body pose and their orientation.  This is crucial as two people facing each other are at greater risk of contagion than when facing away
 * More accurate than location-based technology since it can detect if two people are (not) facing each other
 
-<img src="docs/social_distance.png" height="600">
 
 ### Note on the version
 This is a Beta Version. We are working on it and currently supporting inference with pre-trained models. More is yet to come.
