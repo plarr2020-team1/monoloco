@@ -198,25 +198,35 @@ def social_distance(centers, angles, idx, threshold=2.5):
     sorted_idxs = np.argsort(distances)
 
     for i in sorted_idxs[1:]:
-        dist = distances[i]
-        if dist <= threshold and \
-                check_direction((angle, angles[i]), (xx, centers[i][0]), (zz, centers[i][1]), dist):
+
+        # First check for distance
+        if distances[i] > threshold:
+            return False
+
+        # More accurate check based on orientation and future position
+        elif check_social_distance((xx, centers[i][0]), (zz, centers[i][1]), (angle, angles[i])):
             return True
+
     return False
 
 
-def check_direction(angles, xxs, zzs, distance):
-    """Violation if same angle or 1 in front of the other"""
-    theta1 = angles[0]
-    theta2 = angles[1]
-    x0 = xxs[0] + distance * math.cos(theta1)
-    z0 = zzs[0] - distance * math.sin(theta1)
-    x1 = xxs[1] + distance * math.cos(theta2)
-    z1 = zzs[1] - distance * math.sin(theta2)
-    new_distance = math.sqrt((x0 - x1) ** 2 + (z0 - z1) ** 2)
-    margin = calculate_margin(distance)
-    condition = (new_distance - margin) <= distance
-    return condition
+def check_social_distance(xxs, zzs, angles):
+    """
+    Violation if same angle or ine in front of the other
+    Obtained by assuming straight line, constant velocity and discretizing trajectories
+    """
+    min_distance = 0.5
+    theta0 = angles[0]
+    theta1 = angles[1]
+    steps = np.linspace(0, 2, 20)  # Discretization 20 steps in 2 meters
+    xs0 = [xxs[0] + step * math.cos(theta0) for step in steps]
+    zs0 = [zzs[0] - step * math.sin(theta0) for step in steps]
+    xs1 = [xxs[1] + step * math.cos(theta1) for step in steps]
+    zs1 = [zzs[1] - step * math.sin(theta1) for step in steps]
+    distances = [math.sqrt((xs0[idx] - xs1[idx]) ** 2 + (zs0[idx] - zs1[idx]) ** 2) for idx, _ in enumerate(xs0)]
+    if np.min(distances) <= max(distances[0] / 1.5, min_distance):
+        return True
+    return False
 
 
 def calculate_margin(distance):
@@ -254,27 +264,3 @@ def bird_canvas(args, output_path):
     fig.savefig(output_path)
     plt.close(fig)
     print('Bird-eye-view image saved')
-
-
-def test_social():
-    """test different cases of social distance"""
-    # Case 1: together
-    centers = [[0, 0], [0, 0]]  # (x0,z0), (x1,z1)
-    angles = [0, 0]
-    alert1 = social_distance(centers, angles, 0)
-
-    # Case 2: Far but same direction
-    centers = [[0, 0], [2, 0]]  # (x0,z0), (x1,z1)
-    angles = [0, 0]
-    alert2 = social_distance(centers, angles, 0)
-    l = 3
-
-    # Case3: Close and 30 degrees
-    centers = [[0, 0], [0.5, 0]]  # (x0,z0), (x1,z1)
-    angles = [0, -0.3]
-    alert3 = social_distance(centers, angles, 0)
-
-    # Case3: Far and 30 degrees
-    centers = [[0, 0], [2, 0]]  # (x0,z0), (x1,z1)
-    angles = [0, -0.3]
-    alert4 = social_distance(centers, angles, 0)
