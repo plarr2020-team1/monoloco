@@ -53,8 +53,8 @@ def predict(args):
                 else:
                     file_name = os.path.basename(image_path)
                     output_path = os.path.join(args.output_directory, file_name)
-                im_size = (float(image.size()[0] / args.scale),
-                           float(image.size()[1] / args.scale))
+                im_size = (float(image.size()[1] / args.scale),
+                           float(image.size()[0] / args.scale))
 
                 print('image', idx, image_path, output_path)
 
@@ -93,8 +93,8 @@ def predict(args):
             image_t = torchvision.transforms.functional.to_tensor(image).permute(1, 2, 0)
 
             # Load json
-            basename = os.path.splitext(os.path.basename(im_path))[0]
-            extension = '.png.pifpaf.json'
+            basename, ext = os.path.splitext(os.path.basename(im_path))
+            extension = ext + '.pifpaf.json'
             path_json = os.path.join(args.json_dir, basename + extension)
             annotations = open_annotations(path_json)
 
