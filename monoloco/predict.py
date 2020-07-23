@@ -8,19 +8,25 @@ from openpifpaf import show
 
 from .visuals.printer import Printer
 from .network import PifPaf, ImageList, MonoLoco
-from .network.process import factory_for_gt, preprocess_pifpaf
+from .network.process import factory_for_gt, preprocess_pifpaf, build_bb_depth
+
+import glob
 
 
 def predict(args):
-
+    bb_depth = {}
     cnt = 0
 
     # load pifpaf and monoloco models
     pifpaf = PifPaf(args)
     monoloco = MonoLoco(model=args.model, device=args.device, n_dropout=args.n_dropout, p_dropout=args.dropout)
 
+    images = args.images
+    # files = open('../scenes_with_min_2_people.txt').read().split('\n')
+
+    # images = [f"kitti/val/raw/{f.split('/')[0]}_sync/image_02/data/{f.split('/')[1]}" for f in files if len(f)]
     # data
-    data = ImageList(args.images, scale=args.scale)
+    data = ImageList(images, scale=args.scale)
     data_loader = torch.utils.data.DataLoader(
         data, batch_size=1, shuffle=False,
         pin_memory=args.pin_memory, num_workers=args.loader_workers)
@@ -52,7 +58,7 @@ def predict(args):
 
                 # Extract calibration matrix and ground truth file if present
                 with open(image_path, 'rb') as f:
-                    pil_image = Image.open(f).convert('RGB')
+                    pil_image = Image.open(f).convert('RGB').rotate(90)
                     images_outputs.append(pil_image)
 
                 im_name = os.path.basename(image_path)
@@ -71,6 +77,12 @@ def predict(args):
             factory_outputs(args, images_outputs, output_path, pifpaf_outputs, dic_out=dic_out, kk=kk)
             print('Image {}\n'.format(cnt) + '-' * 120)
             cnt += 1
+            build_bb_depth(bb_depth, dic_out, image_paths[0])
+
+
+    import pickle
+    with open(r"bb_depth.pkl", "wb") as output_file:
+        pickle.dump(bb_depth, output_file)
 
 
 def factory_outputs(args, images_outputs, output_path, pifpaf_outputs, dic_out=None, kk=None):
@@ -110,7 +122,6 @@ def factory_outputs(args, images_outputs, output_path, pifpaf_outputs, dic_out=N
             epistemic = False
             if args.n_dropout > 0:
                 epistemic = True
-
             if dic_out['boxes']:  # Only print in case of detections
                 printer = Printer(images_outputs[1], output_path, kk, output_types=args.output_types
                                   , z_max=args.z_max, epistemic=epistemic)
@@ -118,6 +129,6 @@ def factory_outputs(args, images_outputs, output_path, pifpaf_outputs, dic_out=N
                 printer.draw(figures, axes, dic_out, images_outputs[1], draw_box=args.draw_box,
                              save=True, show=args.show)
 
-        if 'json' in args.output_types:
-            with open(os.path.join(output_path + '.monoloco.json'), 'w') as ff:
-                json.dump(dic_out, ff)
+        #if 'json' in args.output_types:
+        #    with open(os.path.join(output_path + '.monoloco.json'), 'w') as ff:
+        #        json.dump(dic_out, ff)

@@ -21,7 +21,7 @@ class ImageList(torch.utils.data.Dataset):
         image_path = self.image_paths[index]
         ImageFile.LOAD_TRUNCATED_IMAGES = True
         with open(image_path, 'rb') as f:
-            image = Image.open(f).convert('RGB')
+            image = Image.open(f).convert('RGB').rotate(90)
 
         if self.scale > 1.01 or self.scale < 0.99:
             image = torchvision.transforms.functional.resize(image,

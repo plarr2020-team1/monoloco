@@ -153,6 +153,8 @@ class Printer:
                 if draw_text:
                     self.draw_text_front(axes, uv, num)
                     num += 1
+            else:
+                print("not satisfied")
 
         # Draw the bird figure
         num = 0

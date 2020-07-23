@@ -130,6 +130,19 @@ def preprocess_pifpaf(annotations, im_size=None):
 
     return boxes, keypoints
 
+def build_bb_depth(bb_depth, dic_out, file_name):
+    new_bb_depth = {}
+    for i, X in enumerate(dic_out['xyz_pred']):
+        bb = dic_out['boxes'][i]
+        bb[2] += bb[0]
+        bb[3] += bb[1]
+        if X[2] > 0:
+            depth = X[2]
+            new_bb_depth[i] = {
+                'bounding_box': bb,
+                'depth': depth
+            }
+    bb_depth[file_name] = new_bb_depth
 
 def prepare_pif_kps(kps_in):
     """Convert from a list of 51 to a list of 3, 17"""
